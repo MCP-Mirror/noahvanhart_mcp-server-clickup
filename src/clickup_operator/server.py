@@ -38,14 +38,11 @@ async def list_tools():
             }
         ),
         types.Tool(
-            name="get-spaces",
-            description="Get spaces in a team/workspace",
+            name="get-authorized-user",
+            description="Get information about the currently authorized user",
             inputSchema={
                 "type": "object",
-                "properties": {
-                    "team_id": {"type": "string"}
-                },
-                "required": ["team_id"]
+                "properties": {}
             }
         ),
         types.Tool(
@@ -63,19 +60,20 @@ async def list_tools():
             }
         ),
         types.Tool(
-            name="get-lists",
-            description="Get lists in a space",
+            name="create-folder",
+            description="Create a new folder in a space",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "space_id": {"type": "string"}
+                    "space_id": {"type": "string"},
+                    "name": {"type": "string"}
                 },
-                "required": ["space_id"]
+                "required": ["space_id", "name"]
             }
         ),
         types.Tool(
-            name="create-list",
-            description="Create a new list in a space",
+            name="create-folderless-list",
+            description="Create a list directly in a space without a folder",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -83,7 +81,9 @@ async def list_tools():
                     "name": {"type": "string"},
                     "content": {"type": "string", "optional": True},
                     "due_date": {"type": "integer", "optional": True},
-                    "priority": {"type": "integer", "optional": True}
+                    "priority": {"type": "integer", "optional": True},
+                    "assignee": {"type": "integer", "optional": True},
+                    "status": {"type": "string", "optional": True}
                 },
                 "required": ["space_id", "name"]
             }
@@ -97,95 +97,26 @@ async def list_tools():
                     "list_id": {"type": "string"},
                     "name": {"type": "string"},
                     "description": {"type": "string", "optional": True},
-                    "priority": {"type": "integer", "optional": True},
-                    "due_date": {"type": "integer", "optional": True},
-                    "assignees": {"type": "array", "items": {"type": "string"}, "optional": True},
+                    "assignees": {"type": "array", "items": {"type": "integer"}, "optional": True},
                     "tags": {"type": "array", "items": {"type": "string"}, "optional": True},
                     "status": {"type": "string", "optional": True},
+                    "priority": {"type": "integer", "optional": True},
+                    "due_date": {"type": "integer", "optional": True},
+                    "time_estimate": {"type": "integer", "optional": True},
                     "notify_all": {"type": "boolean", "optional": True}
                 },
                 "required": ["list_id", "name"]
             }
         ),
         types.Tool(
-            name="get-tasks",
-            description="Get tasks in a list",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "list_id": {"type": "string"},
-                    "archived": {"type": "boolean", "optional": True},
-                    "page": {"type": "integer", "optional": True},
-                    "order_by": {"type": "string", "optional": True},
-                    "reverse": {"type": "boolean", "optional": True},
-                    "subtasks": {"type": "boolean", "optional": True},
-                    "statuses": {"type": "array", "items": {"type": "string"}, "optional": True},
-                    "assignees": {"type": "array", "items": {"type": "string"}, "optional": True},
-                    "includes": {"type": "array", "items": {"type": "string"}, "optional": True}
-                },
-                "required": ["list_id"]
-            }
-        ),
-        types.Tool(
-            name="update-task",
-            description="Update a task",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "task_id": {"type": "string"},
-                    "name": {"type": "string", "optional": True},
-                    "description": {"type": "string", "optional": True},
-                    "status": {"type": "string", "optional": True},
-                    "priority": {"type": "integer", "optional": True},
-                    "due_date": {"type": "integer", "optional": True},
-                    "assignees": {"type": "array", "items": {"type": "string"}, "optional": True}
-                },
-                "required": ["task_id"]
-            }
-        ),
-        types.Tool(
-            name="start-time",
-            description="Start time tracking for a task",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "task_id": {"type": "string"},
-                    "billable": {"type": "boolean", "optional": True}
-                },
-                "required": ["task_id"]
-            }
-        ),
-        types.Tool(
-            name="stop-time",
-            description="Stop time tracking for a task",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "task_id": {"type": "string"}
-                },
-                "required": ["task_id"]
-            }
-        ),
-        types.Tool(
-            name="get-custom-fields",
-            description="Get custom fields accessible in a list",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "list_id": {"type": "string"}
-                },
-                "required": ["list_id"]
-            }
-        ),
-        types.Tool(
-            name="create-comment",
+            name="create-task-comment",
             description="Create a comment on a task",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "string"},
                     "comment_text": {"type": "string"},
-                    "assignee": {"type": "string", "optional": True},
+                    "assignee": {"type": "integer", "optional": True},
                     "notify_all": {"type": "boolean", "optional": True}
                 },
                 "required": ["task_id", "comment_text"]
@@ -204,28 +135,44 @@ async def list_tools():
             }
         ),
         types.Tool(
-            name="create-checklist-item",
-            description="Create an item in a checklist",
+            name="get-custom-fields",
+            description="Get accessible custom fields in a list",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "checklist_id": {"type": "string"},
-                    "name": {"type": "string"},
-                    "assignee": {"type": "string", "optional": True},
-                    "due_date": {"type": "string", "optional": True}
+                    "list_id": {"type": "string"}
                 },
-                "required": ["checklist_id", "name"]
+                "required": ["list_id"]
             }
         ),
         types.Tool(
-            name="get-space-tags",
-            description="Get all tags in a space",
+            name="start-time-entry",
+            description="Start time tracking for a task",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "space_id": {"type": "string"}
+                    "task_id": {"type": "string"},
+                    "description": {"type": "string", "optional": True},
+                    "billable": {"type": "boolean", "optional": True}
                 },
-                "required": ["space_id"]
+                "required": ["task_id"]
+            }
+        ),
+        types.Tool(
+            name="create-goal",
+            description="Create a new goal in a team",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "team_id": {"type": "string"},
+                    "name": {"type": "string"},
+                    "due_date": {"type": "integer", "optional": True},
+                    "description": {"type": "string", "optional": True},
+                    "multiple_owners": {"type": "boolean", "optional": True},
+                    "owners": {"type": "array", "items": {"type": "integer"}, "optional": True},
+                    "color": {"type": "string", "optional": True}
+                },
+                "required": ["team_id", "name"]
             }
         ),
         types.Tool(
@@ -243,44 +190,21 @@ async def list_tools():
             }
         ),
         types.Tool(
-            name="get-task-dependencies",
-            description="Get task dependencies",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "task_id": {"type": "string"}
-                },
-                "required": ["task_id"]
-            }
-        ),
-        types.Tool(
             name="add-task-dependency",
-            description="Add a dependency to a task",
+            description="Add a dependency between tasks",
             inputSchema={
                 "type": "object",
                 "properties": {
                     "task_id": {"type": "string"},
                     "depends_on": {"type": "string"},
-                    "dependency_type": {"type": "string", "enum": ["blocks", "waiting_on"]}
+                    "dependency_type": {"type": "string", "optional": True}
                 },
                 "required": ["task_id", "depends_on"]
             }
         ),
         types.Tool(
-            name="remove-task-dependency",
-            description="Remove a dependency from a task",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "task_id": {"type": "string"},
-                    "dependency_id": {"type": "string"}
-                },
-                "required": ["task_id", "dependency_id"]
-            }
-        ),
-        types.Tool(
-            name="get-comments",
-            description="Get comments on a task",
+            name="get-task-members",
+            description="Get members assigned to a task",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -290,28 +214,18 @@ async def list_tools():
             }
         ),
         types.Tool(
-            name="update-comment",
-            description="Update a comment",
+            name="invite-guest",
+            description="Invite a guest to a workspace",
             inputSchema={
                 "type": "object",
                 "properties": {
-                    "comment_id": {"type": "string"},
-                    "comment_text": {"type": "string"},
-                    "assignee": {"type": "string", "optional": True},
-                    "resolved": {"type": "boolean", "optional": True}
+                    "team_id": {"type": "string"},
+                    "email": {"type": "string"},
+                    "can_edit_tags": {"type": "boolean", "optional": True},
+                    "can_see_time_estimated": {"type": "boolean", "optional": True},
+                    "can_see_time_spent": {"type": "boolean", "optional": True}
                 },
-                "required": ["comment_id", "comment_text"]
-            }
-        ),
-        types.Tool(
-            name="delete-comment",
-            description="Delete a comment",
-            inputSchema={
-                "type": "object",
-                "properties": {
-                    "comment_id": {"type": "string"}
-                },
-                "required": ["comment_id"]
+                "required": ["team_id", "email"]
             }
         )
     ]
@@ -330,30 +244,15 @@ async def handle_call_tool(
         if not clickup_client:  # Double check initialization worked
             raise RuntimeError("Failed to initialize ClickUp client")
             
-    if name == "get-teams":
-        teams = await clickup_client.get_teams()
-        teams_text = "\n".join([
-            f"- {team['name']} (ID: {team['id']})"
-            for team in teams
-        ])
+    # Authorization endpoints
+    if name == "get-authorized-user":
+        user = await clickup_client.get_authorized_user()
         return [types.TextContent(
             type="text",
-            text=f"Available teams:\n{teams_text}"
+            text=f"Authorized user: {user['username']} (ID: {user['id']})"
         )]
 
-    elif name == "get-spaces":
-        if not arguments:
-            raise ValueError("Missing arguments")
-        spaces = await clickup_client.get_spaces(arguments["team_id"])
-        spaces_text = "\n".join([
-            f"- {space['name']} (ID: {space['id']})"
-            for space in spaces
-        ])
-        return [types.TextContent(
-            type="text",
-            text=f"Spaces in team:\n{spaces_text}"
-        )]
-
+    # Spaces endpoints
     elif name == "create-space":
         if not arguments:
             raise ValueError("Missing arguments")
@@ -368,34 +267,38 @@ async def handle_call_tool(
             text=f"Created space: {space['name']} (ID: {space['id']})"
         )]
 
-    elif name == "get-lists":
+    # Folders endpoints
+    elif name == "create-folder":
         if not arguments:
             raise ValueError("Missing arguments")
-        lists = await clickup_client.get_lists(arguments["space_id"])
-        lists_text = "\n".join([
-            f"- {lst['name']} (ID: {lst['id']})"
-            for lst in lists
-        ])
+        folder = await clickup_client.create_folder(
+            space_id=arguments["space_id"],
+            name=arguments["name"]
+        )
         return [types.TextContent(
             type="text",
-            text=f"Lists in space:\n{lists_text}"
+            text=f"Created folder: {folder['name']} (ID: {folder['id']})"
         )]
 
-    elif name == "create-list":
+    # Lists endpoints
+    elif name == "create-folderless-list":
         if not arguments:
             raise ValueError("Missing arguments")
-        lst = await clickup_client.create_list(
+        lst = await clickup_client.create_folderless_list(
             space_id=arguments["space_id"],
             name=arguments["name"],
             content=arguments.get("content"),
             due_date=arguments.get("due_date"),
-            priority=arguments.get("priority")
+            priority=arguments.get("priority"),
+            assignee=arguments.get("assignee"),
+            status=arguments.get("status")
         )
         return [types.TextContent(
             type="text",
             text=f"Created list: {lst['name']} (ID: {lst['id']})"
         )]
 
+    # Tasks endpoints
     elif name == "create-task":
         if not arguments:
             raise ValueError("Missing arguments")
@@ -403,11 +306,12 @@ async def handle_call_tool(
             list_id=arguments["list_id"],
             name=arguments["name"],
             description=arguments.get("description"),
-            priority=arguments.get("priority"),
-            due_date=arguments.get("due_date"),
             assignees=arguments.get("assignees", []),
             tags=arguments.get("tags", []),
             status=arguments.get("status"),
+            priority=arguments.get("priority"),
+            due_date=arguments.get("due_date"),
+            time_estimate=arguments.get("time_estimate"),
             notify_all=arguments.get("notify_all", False)
         )
         return [types.TextContent(
@@ -415,74 +319,8 @@ async def handle_call_tool(
             text=f"Created task: {task['name']} (ID: {task['id']})"
         )]
 
-    elif name == "get-tasks":
-        if not arguments:
-            raise ValueError("Missing arguments")
-        tasks = await clickup_client.get_tasks(
-            list_id=arguments["list_id"],
-            archived=arguments.get("archived", False),
-            page=arguments.get("page"),
-            order_by=arguments.get("order_by"),
-            reverse=arguments.get("reverse"),
-            subtasks=arguments.get("subtasks"),
-            statuses=arguments.get("statuses", []),
-            assignees=arguments.get("assignees", []),
-            include=arguments.get("includes", [])
-        )
-        tasks_text = "\n".join([
-            f"- {task['name']} (ID: {task['id']})"
-            for task in tasks
-        ])
-        return [types.TextContent(
-            type="text",
-            text=f"Tasks in list:\n{tasks_text}"
-        )]
-
-    elif name == "update-task":
-        if not arguments:
-            raise ValueError("Missing arguments")
-        task_id = arguments.pop("task_id")
-        task = await clickup_client.update_task(task_id=task_id, **arguments)
-        return [types.TextContent(
-            type="text",
-            text=f"Updated task: {task['name']} (ID: {task['id']})"
-        )]
-
-    elif name == "start-time":
-        if not arguments:
-            raise ValueError("Missing arguments")
-        time_entry = await clickup_client.start_time_entry(
-            task_id=arguments["task_id"],
-            billable=arguments.get("billable", False)
-        )
-        return [types.TextContent(
-            type="text",
-            text=f"Started time tracking for task {arguments['task_id']}"
-        )]
-
-    elif name == "stop-time":
-        if not arguments:
-            raise ValueError("Missing arguments")
-        time_entry = await clickup_client.stop_time_entry(arguments["task_id"])
-        return [types.TextContent(
-            type="text",
-            text=f"Stopped time tracking for task {arguments['task_id']}"
-        )]
-
-    elif name == "get-custom-fields":
-        if not arguments:
-            raise ValueError("Missing arguments")
-        fields = await clickup_client.get_accessible_custom_fields(arguments["list_id"])
-        fields_text = "\n".join([
-            f"- {field['name']} ({field['type']})"
-            for field in fields
-        ])
-        return [types.TextContent(
-            type="text",
-            text=f"Custom fields in list:\n{fields_text}"
-        )]
-
-    elif name == "create-comment":
+    # Comments endpoints
+    elif name == "create-task-comment":
         if not arguments:
             raise ValueError("Missing arguments")
         comment = await clickup_client.create_task_comment(
@@ -493,9 +331,10 @@ async def handle_call_tool(
         )
         return [types.TextContent(
             type="text",
-            text=f"Created comment on task {arguments['task_id']}"
+            text=f"Created comment: {comment['id']}"
         )]
 
+    # Checklists endpoints
     elif name == "create-checklist":
         if not arguments:
             raise ValueError("Missing arguments")
@@ -508,33 +347,53 @@ async def handle_call_tool(
             text=f"Created checklist: {checklist['name']} (ID: {checklist['id']})"
         )]
 
-    elif name == "create-checklist-item":
+    # Custom fields endpoints
+    elif name == "get-custom-fields":
         if not arguments:
             raise ValueError("Missing arguments")
-        item = await clickup_client.create_checklist_item(
-            checklist_id=arguments["checklist_id"],
-            name=arguments["name"],
-            assignee=arguments.get("assignee"),
-            due_date=arguments.get("due_date")
-        )
-        return [types.TextContent(
-            type="text",
-            text=f"Created checklist item: {item['name']}"
-        )]
-
-    elif name == "get-space-tags":
-        if not arguments:
-            raise ValueError("Missing arguments")
-        tags = await clickup_client.get_space_tags(arguments["space_id"])
-        tags_text = "\n".join([
-            f"- {tag['name']}"
-            for tag in tags
+        fields = await clickup_client.get_accessible_custom_fields(arguments["list_id"])
+        fields_text = "\n".join([
+            f"- {field['name']} (Type: {field['type']}, ID: {field['id']})"
+            for field in fields
         ])
         return [types.TextContent(
             type="text",
-            text=f"Tags in space:\n{tags_text}"
+            text=f"Custom fields:\n{fields_text}"
         )]
 
+    # Time tracking endpoints
+    elif name == "start-time-entry":
+        if not arguments:
+            raise ValueError("Missing arguments")
+        entry = await clickup_client.start_time_entry(
+            task_id=arguments["task_id"],
+            description=arguments.get("description"),
+            billable=arguments.get("billable")
+        )
+        return [types.TextContent(
+            type="text",
+            text=f"Started time entry: {entry['id']}"
+        )]
+
+    # Goals endpoints
+    elif name == "create-goal":
+        if not arguments:
+            raise ValueError("Missing arguments")
+        goal = await clickup_client.create_goal(
+            team_id=arguments["team_id"],
+            name=arguments["name"],
+            due_date=arguments.get("due_date"),
+            description=arguments.get("description"),
+            multiple_owners=arguments.get("multiple_owners"),
+            owners=arguments.get("owners", []),
+            color=arguments.get("color")
+        )
+        return [types.TextContent(
+            type="text",
+            text=f"Created goal: {goal['name']} (ID: {goal['id']})"
+        )]
+
+    # Tags endpoints
     elif name == "create-space-tag":
         if not arguments:
             raise ValueError("Missing arguments")
@@ -549,78 +408,60 @@ async def handle_call_tool(
             text=f"Created tag: {tag['name']}"
         )]
 
-    elif name == "get-task-dependencies":
-        if not arguments:
-            raise ValueError("Missing arguments")
-        dependencies = await clickup_client.get_task_dependencies(arguments["task_id"])
-        deps_text = "\n".join([
-            f"- {dep['name']} (ID: {dep['id']})"
-            for dep in dependencies
-        ])
-        return [types.TextContent(
-            type="text",
-            text=f"Dependencies for task:\n{deps_text}"
-        )]
-
+    # Dependencies endpoints
     elif name == "add-task-dependency":
         if not arguments:
             raise ValueError("Missing arguments")
-        await clickup_client.add_task_dependency(
+        dependency = await clickup_client.add_task_dependency(
             task_id=arguments["task_id"],
             depends_on=arguments["depends_on"],
             dependency_type=arguments.get("dependency_type", "waiting_on")
         )
         return [types.TextContent(
             type="text",
-            text=f"Added dependency to task {arguments['task_id']}"
+            text=f"Added dependency: {dependency['id']}"
         )]
 
-    elif name == "remove-task-dependency":
+    # Members endpoints
+    elif name == "get-task-members":
         if not arguments:
             raise ValueError("Missing arguments")
-        await clickup_client.remove_task_dependency(
-            task_id=arguments["task_id"],
-            dependency_id=arguments["dependency_id"]
-        )
-        return [types.TextContent(
-            type="text",
-            text=f"Removed dependency from task {arguments['task_id']}"
-        )]
-
-    elif name == "get-comments":
-        if not arguments:
-            raise ValueError("Missing arguments")
-        comments = await clickup_client.get_comments(arguments["task_id"])
-        comments_text = "\n".join([
-            f"- {comment['comment_text']} (ID: {comment['id']})"
-            for comment in comments
+        members = await clickup_client.get_task_members(arguments["task_id"])
+        members_text = "\n".join([
+            f"- {member.get('username', 'Unknown')} (ID: {member.get('id', 'Unknown')})"
+            for member in members
         ])
         return [types.TextContent(
             type="text",
-            text=f"Comments on task:\n{comments_text}"
+            text=f"Task members:\n{members_text}"
         )]
 
-    elif name == "update-comment":
+    # Guests endpoints
+    elif name == "invite-guest":
         if not arguments:
             raise ValueError("Missing arguments")
-        comment = await clickup_client.update_comment(
-            comment_id=arguments["comment_id"],
-            comment_text=arguments["comment_text"],
-            assignee=arguments.get("assignee"),
-            resolved=arguments.get("resolved")
+        guest = await clickup_client.invite_guest(
+            team_id=arguments["team_id"],
+            email=arguments["email"],
+            can_edit_tags=arguments.get("can_edit_tags"),
+            can_see_time_estimated=arguments.get("can_see_time_estimated"),
+            can_see_time_spent=arguments.get("can_see_time_spent")
         )
         return [types.TextContent(
             type="text",
-            text=f"Updated comment: {comment['id']}"
+            text=f"Invited guest: {guest['email']}"
         )]
 
-    elif name == "delete-comment":
-        if not arguments:
-            raise ValueError("Missing arguments")
-        await clickup_client.delete_comment(arguments["comment_id"])
+    # Teams endpoints
+    elif name == "get-teams":
+        teams = await clickup_client.get_teams()
+        teams_text = "\n".join([
+            f"- {team.get('name', 'Unknown')} (ID: {team.get('id', 'Unknown')})"
+            for team in teams
+        ])
         return [types.TextContent(
             type="text",
-            text=f"Deleted comment {arguments['comment_id']}"
+            text=f"Available teams:\n{teams_text}"
         )]
 
     else:

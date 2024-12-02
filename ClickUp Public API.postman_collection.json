@@ -1,0 +1,4620 @@
+{
+	"info": {
+		"_postman_id": "d79acd1d-b0dc-47f5-99e0-9145f0cf19bd",
+		"name": "ClickUp Public API",
+		"description": "# Introduction\n\nLet's make people more productive, together.\n\nPlease use our [feedback board](https://clickup.canny.io/) to report bugs, feature requests, and collaborate with the community.\n\nIf you'd like to import our entire API library, click \\[here\\]([https://t333.s.clickup-attachments.com/t333/3bf59291-47c0-4f1a-ae91-5d9f26a8daca/ClickUp%20API%20V2.postman_collection.json](https://t333.s.clickup-attachments.com/t333/3bf59291-47c0-4f1a-ae91-5d9f26a8daca/ClickUp%20API%20V2.postman_collection.json)) to download the file needed to import through Postman.\n\n# Authentication\n\nThere are two ways to authenticate with ClickUp API 2.0, with a personal token or creating an application and authenticating with an OAuth2 flow. Once you receive one of those two tokens, use that in the `Authorization` header of your API requests.\n\n**IMPORTANT** - _If you are creating an application for others to use, it is highly recommended that you use the OAuth2 flow._\n\n## Personal Token\n\nIf you are using the API for personal use, it is safe to use the personal API token. You can find this token in your user settings, under the `Apps` section. At the top of the page you have the option to generate a personal token. These tokens will always begin with `pk_`.\n\n<img src=\"https://attachments3.clickup.com/343f245e-7d27-411d-96d0-9ad3a6f2f8a7/personal_token.png\">\n\nIf your token becomes compromised, you can regenerate it. However, be aware that any applications that were using the old token will lose access once it has been regenerated.\n\n## OAuth2 Flow\n\nWhen you want to develop an application that others can use, you must go through the OAuth2 flow so that every user that uses your application gets assigned an individualized token. This way each user of your application is able to access their own ClickUp resources. If you are unfamiliar with OAuth2, Digital Ocean has put together a great [guide](https://www.digitalocean.com/community/tutorials/an-introduction-to-oauth-2) that should get you started.\n\n_**Note:**_ _ClickUp uses the authorization code grant type._\n\n### How To Use the ClickUp OAuth2 Flow\n\n1. **Create An OAuth App** - As an admin, navigate to your team settings and click on the `Integrations` section. Once there, click on the icon that is labeled \"ClickUp API\" and create a new app. When you create an app, you will be prompted to enter a name, and at least one redirect url. When your app is created, you will be provided with a `client_id` and a `secret`.\n    \n2. **Authorization Code** - You must first retrieve an authorization code from your user before you can get an access token for their account.\n    \n    - To start this process, redirect the user to `https://app.clickup.com/api?client_id={client_id}&redirect_uri={redirect_uri}` with the redirect query parameter set to a redirect uri that you specified when creating the oauth app. The host of the redirect uri must match one of those redirect uris or the request will fail. The protocol will default to https if not provided, and non-ssl redirect uris may not be supported in the future.\n        \n    - Once the user has accepted or rejected the authorization request, they will be redirected back to the `redirect_uri` with the necessary query parameters for getting an access token.\n        \n3. **Access Token** - Once you have retrieved the authorization code in the previous step, you can then use the route `POST /api/v2/oauth/token` with the parameters `client_id`, `client_secret` , and `code` to get the user access token. This is the token that is used in the `Authorization` header for all requests in the ClickUp API. Skip to the authorization section below for more information on this route.\n    \n4. **Token Teams** - When you redirect your user in step 2 of this flow, they will be prompted which teams (Workspaces) they want to grant you access to. Therefore in order to access a specific Workspace for the user, you need to ensure that they have given you access. You can use the route `GET /api/v2/team` to see which Workspaces they have authorized you to access. If they have not given you access to the appropriate Workspaces, you can redirect them to the authorization code URL from step 2 at any time to reauthorize your app. Below is a screenshot of what the user sees when they visit this URL.\n    \n\n<img src=\"https://attachments3.clickup.com/49988c04-bf0f-42a5-96cc-82ce213b7f5e/token_teams.png\">\n\n## Rate Limiting\n\nThe API is rate limited per OAuth and personal token. You will receive a 429 HTTP status code if you exceed the rate limit. The rate limit varies based on [plan](https://clickup.com/expandplans):\n\n- **Free Forever**, **Unlimited**, and **Business Plan**: 100 requests per minute per token\n    \n- **Business Plus Plan**: 1,000 requests per minute per token\n    \n- **Enterprise Plan**: 10,000 requests per minute per token\n    \n\nLearn more about our [ClickUp Plans](https://clickup.com/pricing).\n\n## Error Handling\n\nErrors responses will return a non-200 status code and a json err message and error code.\n\nCommon errors include:\n\n**`Team not authorized`**: This error is thrown when a team was not authorized by the user for a particular access token. Refer to the `Token Teams` section of the OAuth instructions for more information on how to fix this error. Error codes that are associated with this message include `OAUTH_023`, `OAUTH_026`, `OAUTH_027`, and `OAUTH_029` to `OAUTH_045`\n\n**`Token not found`**: This error is thrown if authorization is revoked by the user, as described in the \"Personal Token\" section. Error codes that are associated with this message include `OAUTH_019`, `OAUTH_021`, `OAUTH_025`, and `OAUTH_077`\n\n**`Authorization Header Required`**: The authorization token was missing in the `Authorization` http header. `OAUTH_017`\n\n**`Client Not Found`**: The client application was not created correctly. `OAUTH_010`\n\n**`Redirect URI not passed`**: The redirect URI was not present during the OAuth authentication flow. Refer to the section \"Create An OAuth App\" to resolve this error. `OAUTH_017`\n\n**`Redirect URI does not match the redirect uris of this application`**: The redirect URI must be registered with your client application. Refer to the section \"Create An OAuth App\" to resolve this error. `OAUTH_007`\n\n## FAQ\n\n> What is `team` in reference to? \n  \n\nTeams is the legacy term for what are now called Workspaces in ClickUp. For compatibility, the term `team` is still used in this API to refer to Workspaces. In our API documentation, `team_id` refers to the id of a Workspace, and `group_id` refers to the id of a user group.\n\n> What `Content-Type` should I use? \n  \n\nWhen formatting your requests to ClickUp, please always use the content type `application/json`. Using form encoded data is not fully supported and can result in unexpected consequences.\n\n> How are projects and Folders related? \n  \n\nProjects are what we used to call Folders in ClickUp V1. If you use the first version of the API, the items that are returned to you as projects are the same as Folders in the second version of the API. You must use the correct nomenclature depending on the version of the API you are using (`project` for V1 and `folder` for V2) and cannot interchange them.\n\n> Does the access token returned from `POST /api/v2/oauth/token` expire? \n  \n\nThe access token does not expire at this time.\n\n> Is it possible to move a task between lists using the API? \n  \n\nIt is not possible to move a task between lists at this time. This is a complicated process, however we hope to implement this on the public API in the near future.\n\n> Will tasks created via API generate notifications? \n  \n\nYes, all actions you take with the public api will trigger all of the same process that would occur through the UI. This includes notifications, websocket messages, webhooks, etc.\n\n> How do I tell who has access to a particular task? \n  \n\nTo get a list of team members that have access to a particular task or list, use the routes `GET /api/v2/task/{{task_id}}/member` and `GET /api/v2/list/{{list_id}}/member` under the \"Members\" section of this documentation.\n\n> How are dates formatted in ClickUp? \n  \n\nClickUp will always display dates in [Unix time](https://en.wikipedia.org/wiki/Unix_time) in milliseconds. You can use a website like [Epoch Converter](https://epochconverter.com/) to convert dates between Unix and human readable date formats.\n\n> What timezone does your API use for timestamps? \n  \n\nOur API always returns timestamps in [UTC (Coordinated Universal Time)](https://en.wikipedia.org/wiki/Coordinated_Universal_Time).\n\n> How are subtasks represented in the API? \n  \n\nSubtasks are identical to tasks in every way. Therefore, you can manipulate subtasks the same way you would update any task with the API. To check if a task object is a subtask or not, locate the `parent` property. If this value is `null` then it is not a subtask, otherwise it will contain the task ID of the subtask's parent.\n\nTo create a subtask, use `POST /api/v2/list/:list_id/task` and make sure to set the `parent` property in the body of the request. Similarly, to update or delete existing subtasks, use the routes `PUT /api/v2/task/:task_id` and `DELETE /api/v2/task/:task_id` respectively. To fetch subtasks, get the parent task and add the subtask query param (`GET /api/v2/task/:parent_id?include_subtasks=true`) or use the search team route with that same query param (`GET /api/v2/team/:team_id/task?subtasks=true`).\n\n> The code examples shown here aren't working \n  \n\nOur code examples are automatically generated and may require customization for specific coding languages and implementation. They are included for reference purposes only.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "26683036"
+	},
+	"item": [
+		{
+			"name": "Attachments",
+			"item": [
+				{
+					"name": "Create Task Attachment",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "",
+								"value": "",
+								"name": "Content-Type",
+								"type": "text",
+								"disabled": true
+							},
+							{
+								"key": "Content-Type",
+								"value": "",
+								"disabled": true
+							}
+						],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "attachment",
+									"type": "file",
+									"src": []
+								}
+							]
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/attachment",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"attachment"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Authorization",
+			"item": [
+				{
+					"name": "Get Access Token",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/oauth/token?client_id=&client_secret=&code=",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"oauth",
+								"token"
+							],
+							"query": [
+								{
+									"key": "client_id",
+									"value": ""
+								},
+								{
+									"key": "client_secret",
+									"value": ""
+								},
+								{
+									"key": "code",
+									"value": ""
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Authorized User",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/user",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"user"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Authorized Teams",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Checklists",
+			"item": [
+				{
+					"name": "Create Checklist",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Checklist\"\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/checklist",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"checklist"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Edit Checklist",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated Checklist\",\n  \"position\": 0\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/checklist/checklist_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"checklist",
+								"checklist_id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Checklist",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/checklist/checklist_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"checklist",
+								"checklist_id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Checklist Item",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Checklist Item\",\n  \"assignee\": 546\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/checklist/checklist_id/checklist_item",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"checklist",
+								"checklist_id",
+								"checklist_item"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Edit Checklist Item",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated Checklist Item\",\n  \"assignee\": null,\n  \"resolved\": true,\n  \"parent\": null\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/checklist/checklist_id/checklist_item/checklist_item_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"checklist",
+								"checklist_id",
+								"checklist_item",
+								"checklist_item_id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Checklist Item",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/checklist/checklist_id/checklist_item/checklist_item_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"checklist",
+								"checklist_id",
+								"checklist_item",
+								"checklist_item_id"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Comments",
+			"item": [
+				{
+					"name": "Create Task Comment",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"comment_text\": \"Task comment content\",\n  \"assignee\": 53480,\n  \"notify_all\": true\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/comment",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"comment"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Chat View Comment",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"comment_text\": \"View comment content\",\n  \"notify_all\": true\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/view/view_id/comment",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"view",
+								"view_id",
+								"comment"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create List Comment",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"comment_text\": \"Task comment content\",\n  \"assignee\": 53480,\n  \"notify_all\": true\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/list/list_id/comment",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"list",
+								"list_id",
+								"comment"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Task Comments",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/comment",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"comment"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Chat View Comments",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/view/view_id/comment",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"view",
+								"view_id",
+								"comment"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get List Comments",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/list/list_id/comment",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"list",
+								"list_id",
+								"comment"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Comment",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"comment_text\": \"Updated comment text\",\n    \"assignee\": 53480,\n    \"resolved\": true\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/comment/comment_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"comment",
+								"comment_id"
+							]
+						},
+						"description": "Please paste comment_id from original task comment created for continuity"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Comment",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/comment/comment_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"comment",
+								"comment_id"
+							]
+						},
+						"description": "Please paste comment_id from original task comment created for continuity"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Custom Fields",
+			"item": [
+				{
+					"name": "Get Accessible Custom Fields",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/list/list_id/field",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"list",
+								"list_id",
+								"field"
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "Get Accessible Custom Fields",
+							"originalRequest": {
+								"method": "GET",
+								"header": [
+									{
+										"key": "Content-Type",
+										"value": "application/json",
+										"type": "text"
+									}
+								],
+								"url": {
+									"raw": "https://api.clickup.com/api/v2/list/901201389277/field",
+									"protocol": "https",
+									"host": [
+										"api",
+										"clickup",
+										"com"
+									],
+									"path": [
+										"api",
+										"v2",
+										"list",
+										"901201389277",
+										"field"
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "Date",
+									"value": "Tue, 16 Jan 2024 15:16:31 GMT"
+								},
+								{
+									"key": "Content-Type",
+									"value": "application/json; charset=utf-8"
+								},
+								{
+									"key": "Transfer-Encoding",
+									"value": "chunked"
+								},
+								{
+									"key": "Connection",
+									"value": "keep-alive"
+								},
+								{
+									"key": "Server",
+									"value": "nginx"
+								},
+								{
+									"key": "x-dns-prefetch-control",
+									"value": "off"
+								},
+								{
+									"key": "expect-ct",
+									"value": "max-age=0"
+								},
+								{
+									"key": "strict-transport-security",
+									"value": "max-age=31536000; includeSubDomains"
+								},
+								{
+									"key": "x-download-options",
+									"value": "noopen"
+								},
+								{
+									"key": "x-content-type-options",
+									"value": "nosniff"
+								},
+								{
+									"key": "x-permitted-cross-domain-policies",
+									"value": "none"
+								},
+								{
+									"key": "x-xss-protection",
+									"value": "0"
+								},
+								{
+									"key": "access-control-allow-origin",
+									"value": "*"
+								},
+								{
+									"key": "access-control-allow-credentials",
+									"value": "true"
+								},
+								{
+									"key": "content-language",
+									"value": "en-US"
+								},
+								{
+									"key": "x-datadog-trace-id",
+									"value": "3850269376927228683"
+								},
+								{
+									"key": "content-security-policy",
+									"value": "frame-ancestors 'self'"
+								},
+								{
+									"key": "cache-control",
+									"value": "no-cache, no-store"
+								},
+								{
+									"key": "pragma",
+									"value": "no-cache"
+								},
+								{
+									"key": "expires",
+									"value": "0"
+								},
+								{
+									"key": "x-ratelimit-limit",
+									"value": "10000"
+								},
+								{
+									"key": "x-ratelimit-remaining",
+									"value": "9999"
+								},
+								{
+									"key": "x-ratelimit-reset",
+									"value": "1705418252"
+								},
+								{
+									"key": "Timing-Allow-Origin",
+									"value": "*"
+								},
+								{
+									"key": "x-received-from",
+									"value": "shard-prod-eu-west-1-2"
+								},
+								{
+									"key": "Content-Encoding",
+									"value": "gzip"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"fields\": [\n        {\n            \"id\": \"080d5e55-7d11-4873-a7ca-6018751927df\",\n            \"name\": \"Year\",\n            \"type\": \"formula\",\n            \"type_config\": {\n                \"simple\": false,\n                \"formula\": \"YEAR(TASK_DUE_DATE)\",\n                \"version\": \"1.5\",\n                \"is_dynamic\": false,\n                \"return_types\": [\n                    \"number\"\n                ],\n                \"calculation_state\": \"ready\"\n            },\n            \"date_created\": \"1701692361548\",\n            \"hide_from_guests\": false,\n            \"required\": false\n        },\n        {\n            \"id\": \"0eeb46bd-fa76-4ace-bb5e-d1592368d28f\",\n            \"name\": \"Week Number\",\n            \"type\": \"formula\",\n            \"type_config\": {\n                \"simple\": false,\n                \"formula\": \"WEEKNUM(TASK_DUE_DATE)\",\n                \"version\": \"1.5\",\n                \"is_dynamic\": false,\n                \"return_types\": [\n                    \"number\"\n                ],\n                \"calculation_state\": \"ready\"\n            },\n            \"date_created\": \"1701692183761\",\n            \"hide_from_guests\": false,\n            \"required\": false\n        },\n        {\n            \"id\": \"22e7956c-d713-43a0-8b24-aa37fedbdcbf\",\n            \"name\": \"$Hourly Rate\",\n            \"type\": \"number\",\n            \"type_config\": {},\n            \"date_created\": \"1684232666851\",\n            \"hide_from_guests\": false,\n            \"required\": false\n        },\n        {\n            \"id\": \"3329a69e-1135-40ff-b464-129f66dba6f6\",\n            \"name\": \"Dropdown Field to be available in mulitiple forms\",\n            \"type\": \"drop_down\",\n            \"type_config\": {\n                \"default\": 0,\n                \"placeholder\": null,\n                \"options\": [\n                    {\n                        \"id\": \"e0964b2c-0bfd-470f-bb3e-0cfcaccd4895\",\n                        \"name\": \"1\",\n                        \"color\": null,\n                        \"orderindex\": 0\n                    },\n                    {\n                        \"id\": \"611bbe9b-de3c-451a-8af8-683951e1cb03\",\n                        \"name\": \"2\",\n                        \"color\": null,\n                        \"orderindex\": 1\n                    },\n                    {\n                        \"id\": \"6c590a01-7cd8-46f7-92bf-49cc21defe04\",\n                        \"name\": \"3\",\n                        \"color\": null,\n                        \"orderindex\": 2\n                    }\n                ]\n            },\n            \"date_created\": \"1685522570864\",\n            \"hide_from_guests\": false,\n            \"required\": false\n        },\n        {\n            \"id\": \"36ace2d0-73bc-42ed-bd3b-f710052ea068\",\n            \"name\": \"New One\",\n            \"type\": \"drop_down\",\n            \"type_config\": {\n                \"default\": 0,\n                \"placeholder\": null,\n                \"options\": [\n                    {\n                        \"id\": \"2feaa3fe-f55e-4a7e-837b-7f416be669f0\",\n                        \"name\": \"Test\",\n                        \"color\": null,\n                        \"orderindex\": 0\n                    },\n                    {\n                        \"id\": \"960ddf8e-2155-40b5-9235-889727f1d9fd\",\n                        \"name\": \"Test 2\",\n                        \"color\": null,\n                        \"orderindex\": 1\n                    }\n                ]\n            },\n            \"date_created\": \"1701700858368\",\n            \"hide_from_guests\": false,\n            \"required\": false\n        },\n        {\n            \"id\": \"547bb04b-67fb-4488-a476-0ee72c375634\",\n            \"name\": \"Admin & HR management\",\n            \"type\": \"number\",\n            \"type_config\": {},\n            \"date_created\": \"1705416184025\",\n            \"hide_from_guests\": false,\n            \"required\": false\n        },\n        {\n            \"id\": \"82ed1ef8-5ec3-4e11-9f76-3c27c09ef3ef\",\n            \"name\": \"Consultant\",\n            \"type\": \"drop_down\",\n            \"type_config\": {\n                \"default\": 0,\n                \"placeholder\": null,\n                \"options\": [\n                    {\n                        \"id\": \"4af2be24-b7e6-4bb3-99e4-8e0a98c1313a\",\n                        \"name\": \"Yemi\",\n                        \"color\": \"#1bbc9c\",\n                        \"orderindex\": 0\n                    },\n                    {\n                        \"id\": \"2bfffeca-760b-4610-8f16-07559b68852d\",\n                        \"name\": \"Fery\",\n                        \"color\": \"#e50000\",\n                        \"orderindex\": 1\n                    },\n                    {\n                        \"id\": \"df851a99-9704-4915-bd6f-ba7d700187db\",\n                        \"name\": \"Puri\",\n                        \"color\": \"#FF7FAB\",\n                        \"orderindex\": 2\n                    }\n                ]\n            },\n            \"date_created\": \"1705416014818\",\n            \"hide_from_guests\": false,\n            \"required\": false\n        },\n        {\n            \"id\": \"babecc5e-71c0-496c-a90b-f903bcd1b987\",\n            \"name\": \"Client Testimonial\",\n            \"type\": \"text\",\n            \"type_config\": {},\n            \"date_created\": \"1674655877856\",\n            \"hide_from_guests\": false,\n            \"required\": null\n        },\n        {\n            \"id\": \"bf547f43-876e-4229-a75a-a279c647a704\",\n            \"name\": \"Project Management\",\n            \"type\": \"number\",\n            \"type_config\": {},\n            \"date_created\": \"1705416160062\",\n            \"hide_from_guests\": false,\n            \"required\": false\n        }\n    ]\n}"
+						}
+					]
+				},
+				{
+					"name": "Set Custom Field Value",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"value\": 0\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/field/field_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"field",
+								"field_id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Custom Field Value",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/field/field_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"field",
+								"field_id"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Dependencies",
+			"item": [
+				{
+					"name": "Add Dependency",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"depends_on\": \"task_id\"\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/dependency",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"dependency"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Dependency",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/dependency?depends_on=task_id&dependency_of=task_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"dependency"
+							],
+							"query": [
+								{
+									"key": "depends_on",
+									"value": "task_id"
+								},
+								{
+									"key": "dependency_of",
+									"value": "task_id"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Add Task Link",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/link/links_to",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"link",
+								"links_to"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Task Link",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/link/links_to",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"link",
+								"links_to"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Folders",
+			"item": [
+				{
+					"name": "Create a Folder",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"New Folder From API V2\"\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/space/space_id/folder",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"space",
+								"space_id",
+								"folder"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update a Folder",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated Folder Name\"\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/folder/folder_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"folder",
+								"folder_id"
+							]
+						},
+						"description": "Please paste previously created folder_id for continuity"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete a Folder",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/folder/folder_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"folder",
+								"folder_id"
+							]
+						},
+						"description": "Please paste previously updated folder_id for continuity"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Folders",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/space/space_id/folder",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"space",
+								"space_id",
+								"folder"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Folder",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/folder/folder_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"folder",
+								"folder_id"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Goals",
+			"item": [
+				{
+					"name": "Create a Goal",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Goal From API V2\",\n  \"due_date\": 1577811600000,\n  \"description\": \"Goal Description\",\n  \"multiple_owners\": true,\n  \"owners\": [\n    53480\n  ],\n  \"color\": \"#32a852\"\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/goal",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"goal"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update a Goal",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Updated Goal Name\",\n    \"due_date\": 1577811600000,\n    \"description\": \"Updated Goal Description\",\n    \"rem_owners\": [53480],\n    \"add_owners\": [53480],\n    \"color\": \"#32a852\"\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/goal/goal_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"goal",
+								"goal_id"
+							]
+						},
+						"description": "Please paste goal_id from previously created Goal for continuity"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete a Goal",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/goal/goal_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"goal",
+								"goal_id"
+							]
+						},
+						"description": "Please paste goal_id from previously updated Goal for continuity"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Goals",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/goal",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"goal"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Goal",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/goal/goal_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"goal",
+								"goal_id"
+							]
+						},
+						"description": "Please paste goal_id after creating another Goal for continuity. "
+					},
+					"response": []
+				},
+				{
+					"name": "Create a Key Result",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"New Key Result From API V2\",\n  \"owners\": [\n    53480\n  ],\n  \"type\": \"number\",\n  \"steps_start\": 0,\n  \"steps_end\": 10,\n  \"unit\": \"km\",\n  \"task_ids\": [],\n  \"list_ids\": []\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/goal/goal_id/key_result",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"goal",
+								"goal_id",
+								"key_result"
+							]
+						},
+						"description": "Please use previously created goal_id created before \"Get Goal\" for continuity"
+					},
+					"response": []
+				},
+				{
+					"name": "Edit a Key Result",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"steps_current\": 5,\n  \"note\": \"Target achieved\"\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/key_result/key_result_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"key_result",
+								"key_result_id"
+							]
+						},
+						"description": "Please paste key_result_id from previously created key_result for continuity"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete a Key Result",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/key_result/key_result_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"key_result",
+								"key_result_id"
+							]
+						},
+						"description": "Please post key_result_id from the previously edited key_result for continuity. Please also delete the previously created Goal created for testing the \"Get Goal\" endpoint."
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Guests",
+			"item": [
+				{
+					"name": "Invite Guest to Workspace",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"email\": \"bspry.testuser4@gmail.com\",\n  \"can_edit_tags\": true,\n  \"can_see_time_estimated\": true,\n  \"can_see_time_spent\": true,\n  \"can_create_views\": true,\n  \"custom_role_id\": 12345\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/guest",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"guest"
+							]
+						},
+						"description": "The type of JSON to fill out:\n{\n  \"email\": \"example@gmail.com\",\n  \"can_edit_tags\": true || false,\n  \"can_see_time_estimated\": true || false,\n  \"can_see_time_spent\": true || false\n}"
+					},
+					"response": []
+				},
+				{
+					"name": "Edit Guest on Workspace",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"can_edit_tags\": true,\n  \"can_see_time_spent\": true,\n  \"can_see_time_estimated\": true,\n  \"can_create_views\": true,\n  \"custom_role_id\":12345\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/guest/guest_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"guest",
+								"guest_id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Guest from Workspace",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/guest/guest_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"guest",
+								"guest_id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Guest",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/guest/guest_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"guest",
+								"guest_id"
+							]
+						},
+						"description": "All the locations on the Workspace the guest has access too"
+					},
+					"response": []
+				},
+				{
+					"name": "Add Guest to Task",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"permission_level\": \"read\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/guest/guest_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"guest",
+								"guest_id"
+							]
+						},
+						"description": "JSON Body:\n{\n  \"permission_level\": \"read\" || \"comment\" || \"edit\" || \"create\"\n}"
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Guest from Task",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/guest/guest_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"guest",
+								"guest_id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Add Guest to List",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/list/list_id/guest/guest_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"list",
+								"list_id",
+								"guest",
+								"guest_id"
+							]
+						},
+						"description": "JSON Body:\n{\n  \"permission_level\": \"read\" || \"comment\" || \"edit\" || \"create\"\n}"
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Guest from List",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/list/list_id/guest/guest_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"list",
+								"list_id",
+								"guest",
+								"guest_id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Add Guest to Folder",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/folder/folder_id/guest/guest_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"folder",
+								"folder_id",
+								"guest",
+								"guest_id"
+							]
+						},
+						"description": "JSON Body:\n{\n  \"permission_level\": \"read\" || \"comment\" || \"edit\" || \"create\"\n}"
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Guest from Folder",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/folder/folder_id/guest/guest_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"folder",
+								"folder_id",
+								"guest",
+								"guest_id"
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"description": "Ability to add and remove guests in certain contexts\n"
+		},
+		{
+			"name": "Lists",
+			"item": [
+				{
+					"name": "Create a List",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"New List Name\",\n  \"content\": \"Sent from API V2\",\n  \"due_date\": 1577811600000,\n  \"due_date_time\": false,\n  \"priority\": 1,\n  \"assignee\": 53480,\n  \"status\": \"red\"\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/folder/folder_id/list",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"folder",
+								"folder_id",
+								"list"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Folderless List",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"name\": \"New List Name\",\r\n  \"content\": \"New List Content\",\r\n  \"due_date\": 1567780450202,\r\n  \"due_date_time\": false,\r\n  \"priority\": 1,\r\n  \"assignee\": 183,\r\n  \"status\": \"red\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/space/space_id/list",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"space",
+								"space_id",
+								"list"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update a List",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"Updated List Name\",\n  \"content\": \"Updated List Content\",\n  \"due_date\": 1577811600000,\n  \"due_date_time\": true,\n  \"priority\": 2,\n  \"assignee\": \"none\"\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/list/list_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"list",
+								"list_id"
+							]
+						},
+						"description": "Please paste previously created list_id for continuity"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete a List",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/list/list_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"list",
+								"list_id"
+							]
+						},
+						"description": "Please paste previously updated list_id for continuity"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Lists",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/folder/folder_id/list",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"folder",
+								"folder_id",
+								"list"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Folderless Lists",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/space/space_id/list",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"space",
+								"space_id",
+								"list"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get List",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/list/list_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"list",
+								"list_id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Add Task To List",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/list/list_id/task/task_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"list",
+								"list_id",
+								"task",
+								"task_id"
+							],
+							"query": [
+								{
+									"key": "list_id",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "task_id",
+									"value": "",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Task From List",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "",
+								"value": "",
+								"disabled": true
+							}
+						],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/list/list_id/task/task_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"list",
+								"list_id",
+								"task",
+								"task_id"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Members",
+			"item": [
+				{
+					"name": "Get Task members",
+					"request": {
+						"auth": {
+							"type": "apikey",
+							"apikey": [
+								{
+									"key": "value",
+									"value": "",
+									"type": "string"
+								},
+								{
+									"key": "key",
+									"value": "Authorization",
+									"type": "string"
+								},
+								{
+									"key": "in",
+									"value": "header",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/86cwtqqzj/member",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"86cwtqqzj",
+								"member"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get List Members",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/list/list_id/member",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"list",
+								"list_id",
+								"member"
+							]
+						},
+						"description": "    "
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Roles",
+			"item": [
+				{
+					"name": "Get Custom Roles",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team_id/customRoles",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team_id",
+								"customRoles"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Shared Hierarchy",
+			"item": [
+				{
+					"name": "Get Shared Hierarchy",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/shared",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"shared"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Spaces",
+			"item": [
+				{
+					"name": "Create a Space",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "\n{\n  \"name\": \"New Space From API V2\",\n  \"multiple_assignees\": true,\n  \"features\": {\n    \"due_dates\": {\n      \"enabled\": true,\n      \"start_date\": false,\n      \"remap_due_dates\": true,\n      \"remap_closed_due_date\": false\n    },\n    \"time_tracking\": {\n      \"enabled\": false\n    },\n    \"tags\": {\n      \"enabled\": true\n    },\n    \"time_estimates\": {\n      \"enabled\": true\n    },\n    \"checklists\": {\n      \"enabled\": true\n    },\n    \"custom_fields\": {\n      \"enabled\": true\n    },\n    \"remap_dependencies\": {\n      \"enabled\": true\n    },\n    \"dependency_warning\": {\n      \"enabled\": true\n    },\n    \"portfolios\": {\n      \"enabled\": true\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/space",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"space"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update a Space",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "\n{\n  \"name\": \"Updated Space Name\",\n  \"color\": \"#7B68EE\",\n  \"private\": false,\n  \"admin_can_manage\": false,\n  \"multiple_assignees\": true,\n  \"features\": {\n    \"due_dates\": {\n      \"enabled\": true,\n      \"start_date\": false,\n      \"remap_due_dates\": true,\n      \"remap_closed_due_date\": false\n    },\n    \"time_tracking\": {\n      \"enabled\": true\n    },\n    \"tags\": {\n      \"enabled\": true\n    },\n    \"time_estimates\": {\n      \"enabled\": true\n    },\n    \"checklists\": {\n      \"enabled\": true\n    },\n    \"custom_fields\": {\n      \"enabled\": true\n    },\n    \"remap_dependencies\": {\n      \"enabled\": true\n    },\n    \"dependency_warning\": {\n      \"enabled\": false\n    },\n    \"portfolios\": {\n      \"enabled\": true\n    }\n  }\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/space/space_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"space",
+								"space_id"
+							]
+						},
+						"description": "Please paste the previously created space_id for continuity"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete a Space",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/space/space_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"space",
+								"space_id"
+							]
+						},
+						"description": "Please paste the previously updated space_id for continuity"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Spaces",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/space",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"space"
+							],
+							"query": [
+								{
+									"key": "archived",
+									"value": "",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Space",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/space/space_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"space",
+								"space_id"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Tags",
+			"item": [
+				{
+					"name": "Get Space Tags",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/space/space_id/tag",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"space",
+								"space_id",
+								"tag"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create a Space Tag",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"tag\": {\n    \"name\": \"API V2\",\n    \"tag_fg\": \"#ffffff\",\n    \"tag_bg\": \"#3c9d9b\"\n  }\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/space/space_id/tag",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"space",
+								"space_id",
+								"tag"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Edit a Space Tag",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"tag\": {\n    \"name\": \"API V2 PUT\",\n    \"tag_fg\": \"#ffffff\",\n    \"tag_bg\": \"#3e3d9f\"\n  }\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/space/space_id/tag/tag_name",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"space",
+								"space_id",
+								"tag",
+								"tag_name"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete a Space Tag",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"tag\": {\r\n    \"name\": \"Tag name\",\r\n    \"tag_fg\": \"#000000\",\r\n    \"tag_bg\": \"#000000\"\r\n  }\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/space/space_id/tag/tag_name",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"space",
+								"space_id",
+								"tag",
+								"tag_name"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Add Tag To Task",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/tag/tag_name",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"tag",
+								"tag_name"
+							],
+							"query": [
+								{
+									"key": "custom_task_ids",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "team_id",
+									"value": "",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Remove Tag From Task",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/tag/tag_name",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"tag",
+								"tag_name"
+							],
+							"query": [
+								{
+									"key": "custom_task_ids",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "team_id",
+									"value": "",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Tasks",
+			"item": [
+				{
+					"name": "Create a Task",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "\n{\n  \"name\": \"New Task Name\",\n  \"description\": \"New Task Description\",\n  \"assignees\": [\n    183\n  ],\n  \"tags\": [\n    \"tag name 1\"\n  ],\n  \"status\": \"Open\",\n  \"priority\": 3,\n  \"due_date\": 1508369194377,\n  \"due_date_time\": false,\n  \"time_estimate\": 8640000,\n  \"start_date\": 1567780450202,\n  \"start_date_time\": false,\n  \"notify_all\": true,\n  \"parent\": null,\n  \"links_to\": null,\n  \"custom_fields\": [\n    {\n      \"id\": \"0a52c486-5f05-403b-b4fd-c512ff05131c\",\n      \"value\": 23\n    },\n    {\n      \"id\": \"03efda77-c7a0-42d3-8afd-fd546353c2f5\",\n      \"value\": \"Text field input\"\n    }\n  ]\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/list/list_id/task",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"list",
+								"list_id",
+								"task"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update a Task",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Updated Task Name\",\n    \"description\": \"Updated Task Content\",\n    \"status\": \"in progress\",\n    \"priority\": 1,\n    \"time_estimate\": 8640000,\n    \"assignees\": {\n        \"add\": [182],\n        \"rem\": [183]\n    },\n    \"archived\": false,\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id"
+							],
+							"query": [
+								{
+									"key": "custom_task_ids",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "team_id",
+									"value": "",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Paste task_id from previously created task.\n\nMake sure to update all fields when testing to make sure they are all updated."
+					},
+					"response": []
+				},
+				{
+					"name": "Delete a Task",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id"
+							],
+							"query": [
+								{
+									"key": "custom_task_ids",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "team_id",
+									"value": "",
+									"disabled": true
+								}
+							]
+						},
+						"description": "Please delete previously created/updated task for continuity"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Tasks",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/list/list_id/task",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"list",
+								"list_id",
+								"task"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "order_by",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "reverse",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "subtasks",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "space_ids[]",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "project_ids[]",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "statuses[]",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "include_closed",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "assignees[]",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "due_date_gt",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "due_date_lt",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "date_created_gt",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "date_created_lt",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "date_updated_gt",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "date_updated_lt",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "custom_fields",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "custom_task_ids",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "team_id",
+									"value": "",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Task",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id"
+							],
+							"query": [
+								{
+									"key": "custom_task_ids",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "team_id",
+									"value": "",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Tasks that have a value in their dropdown field",
+					"request": {
+						"auth": {
+							"type": "apikey",
+							"apikey": [
+								{
+									"key": "value",
+									"value": "",
+									"type": "string"
+								},
+								{
+									"key": "key",
+									"value": "Authorization",
+									"type": "string"
+								}
+							]
+						},
+						"method": "GET",
+						"header": [
+							{
+								"key": "",
+								"value": "",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/9005019039/task?custom_fields=[{field_id:\"82ed1ef8-5ec3-4e11-9f76-3c27c09ef3ef\",\"operator\":\"=\",\"value\":\"4af2be24-b7e6-4bb3-99e4-8e0a98c1313a\"}]",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"9005019039",
+								"task"
+							],
+							"query": [
+								{
+									"key": "custom_fields",
+									"value": "[{field_id:\"82ed1ef8-5ec3-4e11-9f76-3c27c09ef3ef\",\"operator\":\"=\",\"value\":\"4af2be24-b7e6-4bb3-99e4-8e0a98c1313a\"}]"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Task's Time in Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/time_in_status",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"time_in_status"
+							],
+							"query": [
+								{
+									"key": "custom_task_ids",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "team_id",
+									"value": "",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Bulk Tasks' Time in Status",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/bulk_time_in_status/task_ids",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"bulk_time_in_status",
+								"task_ids"
+							],
+							"query": [
+								{
+									"key": "custom_task_ids",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "team_id",
+									"value": "",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Task Templates",
+			"item": [
+				{
+					"name": "Get Task Templates",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/taskTemplate?page=0",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"taskTemplate"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Task From Template",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"name\": \"API V2 Test\"\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/list/list_id/taskTemplate/template_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"list",
+								"list_id",
+								"taskTemplate",
+								"template_id"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Teams (User Groups)",
+			"item": [
+				{
+					"name": "Create a Team",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Team name\"\n    \"member_ids\": [123456, 987654]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/group",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"group"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Teams",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"Team name\"\n    \"member_ids\": [123456, 987654]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/6931406/group",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"6931406",
+								"group"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Team",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"team name\"\n    \"handle\": \"handle\"\n    \"members\": {\n        \"add\":[123456],\n        \"rem\": [654564]\n    }\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/group/group_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"group",
+								"group_id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete a Team",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/group/group_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"group",
+								"group_id"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Teams (Workspaces)",
+			"item": [
+				{
+					"name": "Get Teams",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Workspace Seats",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/workspace_id/seats",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"workspace_id",
+								"seats"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Time Tracking Legacy",
+			"item": [
+				{
+					"name": "Track Time",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"start\": 1567780450202,\n  \"end\": 1508369194377,\n  \"time\": 8640000\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/time",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"time"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Time Tracked",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/time/",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"time",
+								""
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Edit Time Tracked",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"start\": 1567780450202,\n  \"end\": 1508369194377,\n  \"time\": 8640000\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/time/interval_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"time",
+								"interval_id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete Time Tracked",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"type": "text"
+							}
+						],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/task/task_id/time/interval_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"task",
+								"task_id",
+								"time",
+								"interval_id"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Time Tracking 2.0",
+			"item": [
+				{
+					"name": "Get time entries within a date range",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/time_entries",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"time_entries"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get time entry history",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_Id/time_entries/timer_id/history",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_Id",
+								"time_entries",
+								"timer_id",
+								"history"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get singular time entry",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/time_entries/time_entry_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"time_entries",
+								"time_entry_id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get running time entry",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/time_entries/current",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"time_entries",
+								"current"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create a time entry",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"description\": \"from api\",\r\n  \"tags\": [\r\n    {\r\n    \t\"name\": \"josh1\",\r\n    \t\"tag_bg\": \"#BF55EC\",\r\n        \"tag_fg\": \"#BF55EC\"\r\n    }\r\n  ],\r\n  \"start\": 1595282645000,\r\n  \"created_with\": \"string\",\r\n  \"billable\": true,\r\n  \"duration\": 50000,\r\n  \"assignee\": 300528\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/time_entries",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"time_entries"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Remove tags from timer entry",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n\t\"time_entry_ids\": [\n\t\t2004673344540003570\n\t],\n\t\"tags\": [\n\t\t{\n\t\t\t\"name\": \"josh1\",\n\t    \t\"tag_bg\": \"#BF55EC\",\n\t        \"tag_fg\": \"#BF55EC\"\n\t\t}\n\t]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/time_entries/tags",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"time_entries",
+								"tags"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Add tags from time entries",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"time_entry_ids\": [\r\n    \"2043908062133112350\"\r\n  ],\r\n  \"tags\": [\r\n    {\r\n        \"name\": \"test tag\",\r\n        \"tag_bg\": \"#000000\",\r\n        \"tag_fg\": \"#000000\"\r\n    }\r\n  ]\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/time_entries/tags",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"time_entries",
+								"tags"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get all tags from time entries",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/time_entries/tags",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"time_entries",
+								"tags"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Change tag names from time entries",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"name\": \"joshy\",\r\n  \"new_name\": \"MAMA\",\r\n  \"tag_bg\": \"#000000\",\r\n  \"tag_fg\": \"#000000\"\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/time_entries/tags",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"time_entries",
+								"tags"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Start a time entry",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/time_entries/start/{timer_id}",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"time_entries",
+								"start",
+								"{timer_id}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Stop current time entry",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/time_entries/stop",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"time_entries",
+								"stop"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete time a time entry",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/time_entries/time_entry_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"time_entries",
+								"time_entry_id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update a time entry",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"description\": \"string\",\r\n  \"tags\": [\r\n    \"string\"\r\n  ],\r\n  \"tag_action\": \"replace\",\r\n  \"start\": 0,\r\n  \"end\": 0,\r\n  \"tid\": \"JOSH-720\",\r\n  \"billable\": true,\r\n  \"duration\": 40000,\r\n  \"assignee\": 0\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/time_entries/timer_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"time_entries",
+								"timer_id"
+							],
+							"query": [
+								{
+									"key": "custom_task_ids",
+									"value": "",
+									"disabled": true
+								},
+								{
+									"key": "team_id",
+									"value": "",
+									"disabled": true
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			],
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "Users",
+			"item": [
+				{
+					"name": "Invite User to Workspace",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"email\": \"user@example.com\",\r\n  \"admin\": true,\r\n  \"custom_role_id\": 123456\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/user",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"user"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Edit User on Workspace",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\r\n  \"username\": \"User Name\",\r\n  \"admin\": false,\r\n  \"custom_role_id\": 12345\r\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/user/user_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"user",
+								"user_id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Remove User From Workspace",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/user/user_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"user",
+								"user_id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get User",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/user/user_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"user",
+								"user_id"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Views",
+			"item": [
+				{
+					"name": "Create Team View",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"New Team View Name\",\n  \"type\": \"list\",\n  \"grouping\": {\n    \"field\": \"status\",\n    \"dir\": 1,\n    \"collapsed\": [],\n    \"ignore\": false\n  },\n  \"divide\": {\n    \"field\": null,\n    \"dir\": null,\n    \"collapsed\": []\n  },\n  \"sorting\": {\n    \"fields\": []\n  },\n  \"filters\": {\n    \"op\": \"AND\",\n    \"fields\": [],\n    \"search\": \"\",\n    \"show_closed\": false\n  },\n  \"columns\": {\n    \"fields\": []\n  },\n  \"team_sidebar\": {\n    \"assignees\": [],\n    \"assigned_comments\": false,\n    \"unassigned_tasks\": false\n  },\n  \"settings\": {\n    \"show_task_locations\": false,\n    \"show_subtasks\": 3,\n    \"show_subtask_parent_names\": false,\n    \"show_closed_subtasks\": false,\n    \"show_assignees\": true,\n    \"show_images\": true,\n    \"collapse_empty_columns\": null,\n    \"me_comments\": true,\n    \"me_subtasks\": true,\n    \"me_checklists\": true\n  }\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/view",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"view"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Space View",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"API V2 View\",\n  \"type\": \"list\",\n  \"grouping\": {\n    \"field\": \"status\",\n    \"dir\": 1,\n    \"collapsed\": [],\n    \"ignore\": false\n  },\n  \"divide\": {\n    \"field\": null,\n    \"dir\": null,\n    \"collapsed\": []\n  },\n  \"sorting\": {\n    \"fields\": []\n  },\n  \"filters\": {\n    \"op\": \"AND\",\n    \"fields\": [],\n    \"search\": \"\",\n    \"show_closed\": false\n  },\n  \"columns\": {\n    \"fields\": []\n  },\n  \"team_sidebar\": {\n    \"assignees\": [],\n    \"assigned_comments\": false,\n    \"unassigned_tasks\": false\n  },\n  \"settings\": {\n    \"show_task_locations\": false,\n    \"show_subtasks\": 3,\n    \"show_subtask_parent_names\": false,\n    \"show_closed_subtasks\": false,\n    \"show_assignees\": true,\n    \"show_images\": true,\n    \"collapse_empty_columns\": null,\n    \"me_comments\": true,\n    \"me_subtasks\": true,\n    \"me_checklists\": true\n  }\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/space/space_id/view",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"space",
+								"space_id",
+								"view"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create Folder View",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"API V2 View\",\n  \"type\": \"list\",\n  \"grouping\": {\n    \"field\": \"status\",\n    \"dir\": 1,\n    \"collapsed\": [],\n    \"ignore\": false\n  },\n  \"divide\": {\n    \"field\": null,\n    \"dir\": null,\n    \"collapsed\": []\n  },\n  \"sorting\": {\n    \"fields\": []\n  },\n  \"filters\": {\n    \"op\": \"AND\",\n    \"fields\": [],\n    \"search\": \"\",\n    \"show_closed\": false\n  },\n  \"columns\": {\n    \"fields\": []\n  },\n  \"team_sidebar\": {\n    \"assignees\": [],\n    \"assigned_comments\": false,\n    \"unassigned_tasks\": false\n  },\n  \"settings\": {\n    \"show_task_locations\": false,\n    \"show_subtasks\": 3,\n    \"show_subtask_parent_names\": false,\n    \"show_closed_subtasks\": false,\n    \"show_assignees\": true,\n    \"show_images\": true,\n    \"collapse_empty_columns\": null,\n    \"me_comments\": true,\n    \"me_subtasks\": true,\n    \"me_checklists\": true\n  }\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/folder/folder_id/view",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"folder",
+								"folder_id",
+								"view"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Create List View",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"API V2 View\",\n  \"type\": \"list\",\n  \"grouping\": {\n    \"field\": \"status\",\n    \"dir\": 1,\n    \"collapsed\": [],\n    \"ignore\": false\n  },\n  \"divide\": {\n    \"field\": null,\n    \"dir\": null,\n    \"collapsed\": []\n  },\n  \"sorting\": {\n    \"fields\": []\n  },\n  \"filters\": {\n    \"op\": \"AND\",\n    \"fields\": [],\n    \"search\": \"\",\n    \"show_closed\": false\n  },\n  \"columns\": {\n    \"fields\": []\n  },\n  \"team_sidebar\": {\n    \"assignees\": [],\n    \"assigned_comments\": false,\n    \"unassigned_tasks\": false\n  },\n  \"settings\": {\n    \"show_task_locations\": false,\n    \"show_subtasks\": 3,\n    \"show_subtask_parent_names\": false,\n    \"show_closed_subtasks\": false,\n    \"show_assignees\": true,\n    \"show_images\": true,\n    \"collapse_empty_columns\": null,\n    \"me_comments\": true,\n    \"me_subtasks\": true,\n    \"me_checklists\": true\n  }\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/list/list_id/view",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"list",
+								"list_id",
+								"view"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Team Views",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/view",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"view"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Space Views",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/space/space_id/view",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"space",
+								"space_id",
+								"view"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Folder Views",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/folder/folder_id/view",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"folder",
+								"folder_id",
+								"view"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get List Views",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/list/list_id/view",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"list",
+								"list_id",
+								"view"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get View",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/view/view_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"view",
+								"view_id"
+							]
+						},
+						"description": "Please paste view_id from \"API V2 View\" on \"API V2 Test Space\" for continuity"
+					},
+					"response": []
+				},
+				{
+					"name": "Get View Tasks",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/view/view_id/task?page=0",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"view",
+								"view_id",
+								"task"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update View",
+					"request": {
+						"method": "PUT",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"name\": \"API V2 View\",\n  \"type\": \"list\",\n  \"parent\": {\n    \"id\": \"512\",\n    \"type\": 7\n  },\n  \"grouping\": {\n    \"field\": \"status\",\n    \"dir\": 1,\n    \"collapsed\": [],\n    \"ignore\": false\n  },\n  \"divide\": {\n    \"field\": null,\n    \"dir\": null,\n    \"collapsed\": []\n  },\n  \"sorting\": {\n    \"fields\": []\n  },\n  \"filters\": {\n    \"op\": \"AND\",\n    \"fields\": [],\n    \"search\": \"\",\n    \"show_closed\": false\n  },\n  \"columns\": {\n    \"fields\": []\n  },\n  \"team_sidebar\": {\n    \"assignees\": [],\n    \"assigned_comments\": false,\n    \"unassigned_tasks\": false\n  },\n  \"settings\": {\n    \"show_task_locations\": false,\n    \"show_subtasks\": 3,\n    \"show_subtask_parent_names\": true,\n    \"show_closed_subtasks\": true,\n    \"show_assignees\": false,\n    \"show_images\": true,\n    \"collapse_empty_columns\": null,\n    \"me_comments\": true,\n    \"me_subtasks\": true,\n    \"me_checklists\": true\n  }\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/view/view_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"view",
+								"view_id"
+							]
+						},
+						"description": "Please paste view_id from \"API V2 View\" on \"API V2 Test Space\" for continuity"
+					},
+					"response": []
+				},
+				{
+					"name": "Delete a View",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/view/view_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"view",
+								"view_id"
+							]
+						},
+						"description": "Please paste view_id from a view on \"Everything\" for continuity"
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Webhooks",
+			"item": [
+				{
+					"name": "Create a Webhook",
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"endpoint\": \"https://af4a0f62.ngrok.io\",\n  \"events\": [\n    \"taskCreated\",\n    \"taskUpdated\",\n    \"taskDeleted\",\n    \"taskPriorityUpdated\",\n    \"taskStatusUpdated\",\n    \"taskAssigneeUpdated\",\n    \"taskDueDateUpdated\",\n    \"taskTagUpdated\",\n    \"taskMoved\",\n    \"taskCommentPosted\",\n    \"taskCommentUpdated\",\n    \"taskTimeEstimateUpdated\",\n    \"taskTimeTrackedUpdated\",\n    \"listCreated\",\n    \"listUpdated\",\n    \"listDeleted\",\n    \"folderCreated\",\n    \"folderUpdated\",\n    \"folderDeleted\",\n    \"spaceCreated\",\n    \"spaceUpdated\",\n    \"spaceDeleted\",\n    \"goalCreated\",\n    \"goalUpdated\",\n    \"goalDeleted\",\n    \"keyResultCreated\",\n    \"keyResultUpdated\",\n    \"keyResultDelted\"\n  ]\n}"
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/webhook",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"webhook"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Update Webhook",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"endpoint\": \"https://yourdomain.com/webhook\",\n  \"events\": \"*\",\n  \"status\": \"active\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/webhook/webhook_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"webhook",
+								"webhook_id"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete a Webhook",
+					"request": {
+						"method": "DELETE",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/webhook/webhook_id",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"webhook",
+								"webhook_id"
+							]
+						},
+						"description": "Please paste webhook_id from previously created webhook for continuity"
+					},
+					"response": []
+				},
+				{
+					"name": "Get Webhooks",
+					"protocolProfileBehavior": {
+						"disableBodyPruning": true
+					},
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Content-Type",
+								"value": "application/json",
+								"name": "Content-Type",
+								"type": "text"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": ""
+						},
+						"url": {
+							"raw": "https://api.clickup.com/api/v2/team/team_id/webhook",
+							"protocol": "https",
+							"host": [
+								"api",
+								"clickup",
+								"com"
+							],
+							"path": [
+								"api",
+								"v2",
+								"team",
+								"team_id",
+								"webhook"
+							]
+						},
+						"description": "Please create another webhook and test afterward"
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "apikey",
+		"apikey": [
+			{
+				"key": "value",
+				"value": "{{value}}",
+				"type": "string"
+			},
+			{
+				"key": "key",
+				"value": "{{key}}",
+				"type": "string"
+			},
+			{
+				"key": "in",
+				"value": "header",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "task_id",
+			"value": ""
+		},
+		{
+			"key": "task_ids",
+			"value": ""
+		},
+		{
+			"key": "API_TOKEN",
+			"value": ""
+		},
+		{
+			"key": "value",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "key",
+			"value": "",
+			"type": "default"
+		},
+		{
+			"key": "in",
+			"value": "",
+			"type": "default"
+		}
+	]
+}
