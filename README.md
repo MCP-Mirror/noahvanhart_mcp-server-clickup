@@ -2,6 +2,11 @@
 
 clickup thru claude
 
+```bash
+uv --directory C:\Users\noahv\Documents\GitHub\clickup-operator run clickup-operator
+```
+
+
 ## Components
 
 ### Resources

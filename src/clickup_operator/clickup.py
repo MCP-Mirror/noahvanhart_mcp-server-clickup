@@ -9,7 +9,17 @@ class ClickUpAPI:
             "Authorization": api_key,
             "Content-Type": "application/json"
         }
-        self.client = httpx.AsyncClient(headers=self.headers)
+        self._setup_client()
+    
+    def _setup_client(self):
+        """Setup the HTTP client with proper timeout and retry settings"""
+        timeout = httpx.Timeout(30.0, connect=10.0)  # 30s timeout, 10s connect timeout
+        limits = httpx.Limits(max_keepalive_connections=5, max_connections=10)
+        self.client = httpx.AsyncClient(
+            headers=self.headers,
+            timeout=timeout,
+            limits=limits
+        )
     
     async def get_teams(self) -> List[Dict[str, Any]]:
         """Get all accessible teams/workspaces"""
